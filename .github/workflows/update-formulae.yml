@@ -1,0 +1,63 @@
+name: Update formulae
+
+# 각 formula 가 설치하는 GitHub 릴리스의 최신 버전을 확인해 url/sha256 을 올리고,
+# macOS 에서 audit/install/test 가 통과할 때만 커밋한다. 프로젝트 쪽 릴리스
+# 워크플로가 workflow_dispatch 로 바로 부를 수도 있다.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      formula:
+        description: 'Only this formula (default: all)'
+        required: false
+      verify:
+        description: 'Run audit/install/test even when nothing changed'
+        type: boolean
+        default: false
+
+concurrency: update-formulae
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_ENV_HINTS: 1
+    steps:
+      # 공급망 공격 방지를 위해 액션은 태그가 아니라 커밋 SHA 로 고정한다.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: bump
+        env:
+          FORMULA: ${{ inputs.formula }}
+        run: python3 .github/scripts/bump-formula.py $FORMULA
+      - name: audit, install and test
+        if: steps.bump.outputs.changed != '' || inputs.verify
+        env:
+          CHANGED: ${{ steps.bump.outputs.changed }}
+          FORMULA: ${{ inputs.formula }}
+        run: |
+          names="${CHANGED:-${FORMULA:-$(basename -s .rb Formula/*.rb | tr '\n' ' ')}}"
+          brew tap horyu1234/tap
+          # 원격 HEAD 가 아니라 이 작업 트리의 formula 를 검사한다.
+          cp Formula/*.rb "$(brew --repository horyu1234/tap)/Formula/"
+          for n in $names; do
+            brew style "horyu1234/tap/$n"
+            brew audit --strict --online "horyu1234/tap/$n"
+            brew reinstall "horyu1234/tap/$n"
+            brew test "horyu1234/tap/$n"
+          done
+      - name: commit
+        if: steps.bump.outputs.changed != ''
+        env:
+          MESSAGE: ${{ steps.bump.outputs.message }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "$MESSAGE"
+          git push
