@@ -1,23 +1,24 @@
 # horyu1234/tap
 
-Homebrew formulae for [RouteBox](https://github.com/horyu1234/route-box).
+Homebrew formulae for [RouteBox](https://github.com/horyu1234/route-box), a local HTTP proxy with a terminal UI that sends the domains you choose through the SSH/SOCKS5 tunnels you choose.
 
 ```sh
 brew install horyu1234/tap/routebox
 ```
 
-Formulae build from the tagged source release with Go, so nothing unsigned is downloaded.
+The formula installs the prebuilt binary attached to the [GitHub release](https://github.com/horyu1234/route-box/releases) for macOS and Linux (arm64, x86_64). Go is not needed.
 
-## Updating a formula after a release
+## Updating the formula after a release
+
+Pushing a `vX.Y.Z` tag to route-box builds the release binaries and a `SHA256SUMS` file. Then:
 
 ```sh
-url=https://github.com/horyu1234/route-box/archive/refs/tags/vX.Y.Z.tar.gz
-curl -sL "$url" | shasum -a 256   # new sha256
+gh release download vX.Y.Z -R horyu1234/route-box -p SHA256SUMS -O - # four sha256 values
 ```
 
-Update `url` and `sha256` in `Formula/routebox.rb`, then check it:
+Set the four `url`/`sha256` pairs in `Formula/routebox.rb`, then check it:
 
 ```sh
 brew audit --strict --online horyu1234/tap/routebox
-brew install --build-from-source horyu1234/tap/routebox && brew test routebox
+brew reinstall horyu1234/tap/routebox && brew test routebox
 ```
